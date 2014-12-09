@@ -4,3 +4,6 @@
 .gradle
 example/target
 build
+
+local.properties
+.idea/
