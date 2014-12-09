@@ -57,14 +57,14 @@ class HockeyAppUploadTask extends DefaultTask {
 
     HockeyAppUploadTask() {
         super()
-        this.description = "Uploades the app (Android: (.apk, mapping.txt), iOS:(.ipa, .dsym)) to HockeyApp"
+        this.description = "Uploads the app (Android: (.apk, mapping.txt), iOS:(.ipa, .dsym)) to HockeyApp"
     }
 
 
     @TaskAction
     def upload() throws IOException {
 
-        if (!project.hockeyapp.apiToken) {
+        if (!getApiToken()) {
             throw new IllegalArgumentException("Cannot upload to HockeyApp because API Token is missing")
         }
 
@@ -75,18 +75,21 @@ class HockeyAppUploadTask extends DefaultTask {
             }
         }
 
+        logger.lifecycle("App file: " + applicationFile.absolutePath)
+
         // Retrieve mapping file if not using Android Gradle Plugin
         // Requires it to be set in the project config
         if (mightHaveMapping && !mappingFile && project.hockeyapp.symbolsDirectory?.exists()) {
             symbolsDirectory = project.hockeyapp.symbolsDirectory
             mappingFile = getFile(project.hockeyapp.mappingFileNameRegex, symbolsDirectory);
-            logger.lifecycle("App file: " + applicationFile.absolutePath)
-            if (mappingFile) {
-                logger.lifecycle("Mapping file: " + mappingFile.absolutePath)
-            }
-            else {
+
+            if (!mappingFile) {
                 logger.warn("No Mapping file found.")
             }
+        }
+
+        if (mappingFile) {
+            logger.lifecycle("Mapping file: " + mappingFile.absolutePath)
         }
 
         String appId = null
@@ -139,7 +142,7 @@ class HockeyAppUploadTask extends DefaultTask {
         }
         decorateWithOptionalProperties(entityBuilder)
 
-        httpPost.addHeader("X-HockeyAppToken", project.hockeyapp.apiToken)
+        httpPost.addHeader("X-HockeyAppToken", getApiToken())
 
 
         int lastProgress = 0
@@ -205,11 +208,23 @@ class HockeyAppUploadTask extends DefaultTask {
         if (project.hockeyapp.notify) {
             entityBuilder.addPart("notify", new StringBody(project.hockeyapp.notify))
         }
-        if (project.hockeyapp.notesType) {
-            entityBuilder.addPart("notes_type", new StringBody(project.hockeyapp.notesType))
+        String notesType = project.hockeyapp.notesType
+        if(project.hockeyapp.variantToNotesType){
+        	if(project.hockeyapp.variantToNotesType[variantName]){
+        		notesType = project.hockeyapp.variantToNotesType[variantName]
+        	}
         }
-        if (project.hockeyapp.notes) {
-            entityBuilder.addPart("notes", new StringBody(project.hockeyapp.notes))
+        if (notesType) {
+            entityBuilder.addPart("notes_type", new StringBody(notesType))
+        }
+        String notes = project.hockeyapp.notes
+        if(project.hockeyapp.variantToNotes){
+        	if(project.hockeyapp.variantToNotes[variantName]){
+        		notes = project.hockeyapp.variantToNotes[variantName]
+        	}
+        }
+        if (notes) {
+            entityBuilder.addPart("notes", new StringBody(notes))
         }
         String status = project.hockeyapp.status
         if (project.hockeyapp.variantToStatus) {
@@ -220,7 +235,13 @@ class HockeyAppUploadTask extends DefaultTask {
         if (status) {
             entityBuilder.addPart("status", new StringBody(status))
         }
-        if (project.hockeyapp.releaseType) {
+        String releaseType = project.hockeyapp.releaseType
+        if (project.hockeyapp.variantToReleaseType) {
+            if (project.hockeyapp.variantToReleaseType[variantName]) {
+                releaseType = project.hockeyapp.variantToReleaseType[variantName]
+            }
+        }
+        if (releaseType) {
             entityBuilder.addPart("release_type", new StringBody(project.hockeyapp.releaseType))
         }
         if (project.hockeyapp.commitSha) {
@@ -247,6 +268,16 @@ class HockeyAppUploadTask extends DefaultTask {
         if (mandatory){
             entityBuilder.addPart("mandatory", new StringBody(mandatory))
         }
+    }
+
+    private String getApiToken() {
+        String apiToken = project.hockeyapp.apiToken
+        if (project.hockeyapp.variantToApiToken) {
+            if (project.hockeyapp.variantToApiToken[variantName]) {
+                apiToken = project.hockeyapp.variantToApiToken[variantName]
+            }
+        }
+        return apiToken
     }
 
     @Nullable
